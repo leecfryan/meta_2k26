@@ -1,104 +1,95 @@
-import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import { requireRole } from "@/lib/authz";
-import { createClanAction, deleteClanAction } from "./actions";
+import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { createClanAction, deleteClanAction } from "./actions";
+import { createSubclanAction, deleteSubclanAction } from "../subclans/actions";
 
 import ClanCreateForm from "./ui/ClanCreateForm";
+import SubclanCreateForm from "../subclans/ui/SubclanCreateForm";
+import ClanCard from "./ui/ClanCard";
+
+import { Button } from "@/components/ui/button";
+
+const clanColors = [
+  "bg-purple-600",
+  "bg-blue-600",
+  "bg-green-600",
+  "bg-pink-600",
+  "bg-orange-600",
+  "bg-red-600",
+];
+
+type Clan = { id: string; name: string };
+type Subclan = { id: string; name: string; clan_id: string };
 
 export default async function AdminClansPage() {
   await requireRole(["ADMIN", "SUPERUSER"]);
+
   const admin = createSupabaseAdminClient();
 
-  const { data: clans, error } = await admin
+  const { data: clans, error: clansError } = await admin
     .from("clans")
     .select("id,name")
     .order("name", { ascending: true });
 
-  if (error) {
+  const { data: subclans, error: subclansError } = await admin
+    .from("subclans")
+    .select("id,name,clan_id")
+    .order("name", { ascending: true });
+
+  if (clansError || subclansError) {
     return (
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold">Clans</h1>
+        <h1 className="text-2xl font-bold">Metamorphosis Structure</h1>
         <p className="text-red-600 text-sm">
-          Failed to load clans: {error.message}
+          Failed to load data: {clansError?.message ?? subclansError?.message}
         </p>
       </div>
     );
   }
 
+  const clansList = (clans ?? []) as Clan[];
+  const subclansList = (subclans ?? []) as Subclan[];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Clans</h1>
-        <p className="text-sm text-muted-foreground">
-          Create and manage clans for Metamorphosis.
+        <h1 className="text-3xl font-bold">Metamorphosis Structure</h1>
+        <p className="text-muted-foreground text-sm">
+          Manage clans and subclans in one place.
         </p>
       </div>
 
-      <Card>
-        <CardContent className="p-4 space-y-3">
-          <h2 className="font-semibold">Create Clan</h2>
+      {/* Clan Cards */}
+      <div className="grid gap-6">
+        {clansList.map((clan, index) => {
+          const color = clanColors[index % clanColors.length];
+          const clanSubclans = subclansList
+            .filter((s) => s.clan_id === clan.id)
+            .map((s) => ({ id: s.id, name: s.name }));
 
-          {/* Client component form for nice UX (form state & message) */}
-          <ClanCreateForm action={createClanAction} />
-        </CardContent>
-      </Card>
+          return (
+            <ClanCard
+              key={clan.id}
+              clan={clan}
+              colorClass={color}
+              subclans={clanSubclans}
+            />
+          );
+        })}
 
-      <Card>
-        <CardContent className="p-4">
-          <h2 className="font-semibold mb-3">Existing Clans</h2>
+        {clansList.length === 0 && (
+          <div className="rounded-xl border p-6 text-sm text-muted-foreground">
+            No clans yet. Create your first clan below.
+          </div>
+        )}
+      </div>
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead className="w-28 text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              {(clans ?? []).map((clan) => (
-                <TableRow key={clan.id}>
-                  <TableCell className="font-medium">{clan.name}</TableCell>
-                  <TableCell className="text-right">
-                    <form
-                      action={async () => {
-                        "use server";
-                        await deleteClanAction(clan.id);
-                      }}
-                    >
-                      <Button variant="destructive" size="sm" type="submit">
-                        Delete
-                      </Button>
-                    </form>
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {(!clans || clans.length === 0) && (
-                <TableRow>
-                  <TableCell
-                    colSpan={2}
-                    className="text-sm text-muted-foreground"
-                  >
-                    No clans yet. Create one above.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Create Clan */}
+      <div className="rounded-xl border p-6 bg-gray-50 space-y-3">
+        <h2 className="font-semibold">Create New Clan</h2>
+        <ClanCreateForm action={createClanAction} />
+      </div>
     </div>
   );
 }
